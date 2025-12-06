@@ -1,0 +1,101 @@
+name: Construcción y despliegue de una aplicación MVC a Azure
+
+env:
+  AZURE_WEBAPP_NAME: upt-awa-XXX  # Aqui va el nombre de su aplicación
+  DOTNET_VERSION: '8'                     # la versión de .NET
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'Shorten/**'
+      - '.github/workflows/ci-cd.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  sonarcloud:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v4
+        with:
+          path: ~\sonar\cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+      
+      - name: Cache SonarCloud scanner
+        id: cache-sonar-scanner
+        uses: actions/cache@v4
+        with:
+          path: .\.sonar\scanner
+          key: ${{ runner.os }}-sonar-scanner
+          restore-keys: ${{ runner.os }}-sonar-scanner
+      
+      - name: Install SonarCloud scanner
+        if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ./.sonar/scanner
+          dotnet tool update dotnet-sonarscanner --tool-path ./.sonar/scanner
+      
+      - name: Restore dependencies
+        run: cd Shorten && dotnet restore
+      
+      - name: Build and analyze
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          ./.sonar/scanner/dotnet-sonarscanner begin /k:"UPT-FAING-EPIS_lab-2025-ii-si784-u1-04-csharp-renzoloyola" /o:"upt-faing-epis" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io"
+          cd Shorten && dotnet build --no-restore
+          cd ..
+          ./.sonar/scanner/dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+
+  # Los siguientes jobs requieren credenciales de Azure y están comentados
+  # Descomentar cuando se tengan los secrets configurados
+  
+  # build:
+  #   runs-on: ubuntu-latest
+  #   needs: sonarcloud
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: 'Login to GitHub Container Registry'
+  #       uses: docker/login-action@v3
+  #       with:
+  #           registry: ghcr.io
+  #           username: ${{github.actor}}
+  #           password: ${{secrets.GITHUB_TOKEN}}
+
+  #     - name: 'Build Inventory Image'
+  #       run: |
+  #           docker build . --tag ghcr.io/${{github.actor}}/shorten:${{github.sha}}
+  #           docker push ghcr.io/${{github.actor}}/shorten:${{github.sha}}
+
+  # deploy:
+  #   permissions:
+  #     contents: none
+  #   runs-on: ubuntu-latest
+  #   needs: build
+  #   environment:
+  #     name: 'Development'
+  #     url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+
+  #   steps:
+  #     - name: Desplegar a Azure Web App
+  #       id: deploy-to-webapp
+  #       uses: azure/webapps-deploy@v2
+  #       with:
+  #         app-name: ${{ env.AZURE_WEBAPP_NAME }}
+  #         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+  #         images: ghcr.io/${{github.actor}}/shorten:${{github.sha}}

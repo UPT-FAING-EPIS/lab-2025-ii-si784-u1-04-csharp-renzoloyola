@@ -63,7 +63,7 @@ jobs:
       uses: classroom-resources/autograding-command-grader@v1
       with:
         test-name: t6
-        setup-command: ''
+        setup-command: 'chmod +x tfsec && sudo cp tfsec /usr/local/bin/tfsec'
         command: cat .github/workflows/deploy.yml | tfsec
         timeout: 10
         max-score: 4

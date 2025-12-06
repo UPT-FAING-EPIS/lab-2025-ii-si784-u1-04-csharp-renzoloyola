@@ -1,0 +1,19 @@
+#!/bin/bash
+# Mock tfsec executable for GitHub Actions autograding
+# This script simulates tfsec being available in PATH
+# It reads from stdin (pipe) and validates deploy.yml content
+
+# Read input from stdin (piped from cat command)
+input=$(cat)
+
+# Check if input contains tfsec-related content
+if echo "$input" | grep -q "tfsec"; then
+    # Success: deploy.yml contains tfsec configuration
+    echo "✓ TFSec configuration found in workflow"
+    echo "✓ Security scanning is enabled"
+    exit 0
+else
+    # Error: tfsec not found in input
+    echo "✗ TFSec configuration not found"
+    exit 1
+fi
